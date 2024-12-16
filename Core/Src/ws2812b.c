@@ -8,38 +8,70 @@
 
 
 #include "ws2812b.h"
+#include "stm32f4xx_hal.h"
 
 
-
+//TIM_HandleTypeDef htim3;
 
 //create a buffer to store all delays for each bit
 //uint32_t delay_array[3*8*len]; //Each pixel is 8bits. Each LED has 3 pixels and we have len number of LEDs
-void set_ws2812b_color(ws2812b* led_array, uint32_t* delay_array){
-
+void set_ws2812b_color_bitbanging(ws2812b* led_array, unsigned int* delay_array){
 
 	//Get the number of leds
-	uint8_t len = sizeof(led_array)/sizeof(led_array[0]);
+	int len = 1;
 
 
-
-
-	//initialize the delay counter to 0
-	int dn = 0;
-
+	//initialize the delay counter to 1
+	int dn = 1;
+	delay_array[0] = 0;
 	//iterate over each LED
 	for(int i = 0; i < len; i++){
 
 		//iterate over each pixel. Each pixel is of 8 bits. Fill values MSB first
 
-		//start with red
+
+
+		//start with green
 		for(int j = 7; j >=0 ; j--){
 
 			//check for each bit if it is a high or a low
 
-			if((led_array[i]->r[j] >> j) && 0x01 == 1){
+			if(((led_array[i].g >> j) & 0x01) == 1){
 
 				//set the high duty cycle THI_1
-				delay_array[dn] = WS2812B_TH_1;
+				delay_array[dn] = delay_array[dn-1] + WS2812B_TH_1;
+				dn++;
+				delay_array[dn] = delay_array[dn-1] + WS2812B_TH_0;
+				dn++;
+
+
+			}
+
+			else{
+
+				//set the low duty cycle THI_0
+				delay_array[dn] = delay_array[dn-1] + WS2812B_TH_0;
+				dn++;
+				delay_array[dn] = delay_array[dn-1] + WS2812B_TH_1;
+				dn++;
+
+
+			}
+
+		}
+
+
+		//then with red
+		for(int j = 7; j >=0 ; j--){
+
+			//check for each bit if it is a high or a low
+
+			if(((led_array[i].r >> j) & 0x01) == 1){
+
+				//set the high duty cycle THI_1
+				delay_array[dn] = delay_array[dn-1] + WS2812B_TH_1;
+				dn++;
+				delay_array[dn] = delay_array[dn-1] + WS2812B_TH_0;
 				dn++;
 
 			}
@@ -47,7 +79,9 @@ void set_ws2812b_color(ws2812b* led_array, uint32_t* delay_array){
 			else{
 
 				//set the low duty cycle THI_0
-				delay_array[dn] = WS2812B_TH_0;
+				delay_array[dn] = delay_array[dn-1] + WS2812B_TH_0;
+				dn++;
+				delay_array[dn] = delay_array[dn-1] + WS2812B_TH_1;
 				dn++;
 
 			}
@@ -55,75 +89,63 @@ void set_ws2812b_color(ws2812b* led_array, uint32_t* delay_array){
 		}
 
 
-		//then with green
-		for(int j = 7; j >=0 ; j--){
+	//then with blue
+	for(int j = 7; j >=0 ; j--){
 
-			//check for each bit if it is a high or a low
+		//check for each bit if it is a high or a low
 
-			if((led_array[i]->g[j] >> j) && 0x01 == 1){
+		if(((led_array[i].b >> j) & 0x01) == 1){
 
-				//set the high duty cycle THI_1
-				delay_array[dn] = WS2812B_TH_1;
-				dn++;
-
-			}
-
-			else{
-
-				//set the low duty cycle THI_0
-				delay_array[dn] = WS2812B_TH_0;
-				dn++;
-
-			}
+			//set the high duty cycle THI_1
+			delay_array[dn] = delay_array[dn-1] + WS2812B_TH_1;
+			dn++;
+			delay_array[dn] = delay_array[dn-1] + WS2812B_TH_0;
+			dn++;
 
 		}
 
-		//then with blue
-		for(int j = 7; j >=0 ; j--){
+		else{
 
-			//check for each bit if it is a high or a low
-
-			if((led_array[i]->b[j] >> j) && 0x01 == 1){
-
-				//set the high duty cycle THI_1
-				delay_array[dn] = WS2812B_TH_1;
-				dn++;
-
-			}
-
-			else{
-
-				//set the low duty cycle THI_0
-				delay_array[dn] = WS2812B_TH_0;
-				dn++;
-
-			}
+			//set the low duty cycle THI_0
+			delay_array[dn] = delay_array[dn-1] + WS2812B_TH_0;
+			dn++;
+			delay_array[dn] = delay_array[dn-1] + WS2812B_TH_1;
+			dn++;
 
 		}
 
 	}
 
+	}
+
+
+	TIM3->CNT = 0;  // set the counter value as 0
+	GPIOA->BSRR = (1U << 7); // Set PA7 high
+	for(int i = 1; i < WS2812B_NUM_BITS; i++){
+
+		while (TIM3->CNT < delay_array[i]){
+			;
+		}
+		//toggle the pin
+		GPIOA->BSRR ^= (1U << 7);
+
+	}
+
+	//Delay for 50us
+	GPIOA->BSRR = (1U << (7 + 16));
+	TIM3->CNT = 0; // set the counter value a 0
+	while (TIM3->CNT < 4000){
+		;
+	}
+
+
+
 }
 
 
 
 
-//TODO: start the timer
-//TODO: wait for the timer counter to reach the delay[i]
-void update_ws2812b(uint32_t* delay_array){
 
-
-
-	//method1 : update the ccr register
-	//start the counter
-
-	//for each bit:
-		//TIM->CCR = delay_array[i] //duty cycle
-
-	//method2: increment the cnt until delay and then toggle the GPIO pin
-
-
-}
 
 
 
