@@ -11,10 +11,11 @@
 #include "stm32f4xx_hal.h"
 
 
-//TIM_HandleTypeDef htim3;
+uint16_t WS2812B_DMA_BUFF[WS2812B_DMA_BUFF_LEN];
+
 
 //create a buffer to store all delays for each bit
-//uint32_t delay_array[3*8*len]; //Each pixel is 8bits. Each LED has 3 pixels and we have len number of LEDs
+//uint32_t delay_array[2*3*8*len]; //Each pixel is 8bits. Each LED has 3 pixels and we have len number of LEDs.
 void set_ws2812b_color_bitbanging(ws2812b* led_array, unsigned int* delay_array){
 
 	//Get the number of leds
@@ -134,13 +135,124 @@ void set_ws2812b_color_bitbanging(ws2812b* led_array, unsigned int* delay_array)
 	//Delay for 50us
 	GPIOA->BSRR = (1U << (7 + 16));
 	TIM3->CNT = 0; // set the counter value a 0
-	while (TIM3->CNT < 4000){
+	while (TIM3->CNT < 000){
 		;
 	}
 
 
 
 }
+
+
+
+
+void ws2812b_init(){
+
+
+	for(int i = 0; i < WS2812B_DMA_BUFF_LEN; i++){
+
+		WS2812B_DMA_BUFF[i] = 0;
+
+	}
+
+
+}
+
+
+
+void ws2812b_update_dma_buff(ws2812b* led_array){
+
+
+	int dn = 0;
+
+	for(int i = 0; i < WS2812B_LED_COUNT; i++){
+
+		//start with green
+		for(int j = 7; j >= 0; j--){
+
+			if(((led_array[i].g >> j) & 0x01) == 1){
+
+				//set the high duty cycle THI_1
+				WS2812B_DMA_BUFF[dn] =  WS2812B_TH_1;
+				dn++;
+
+
+			}
+
+			else
+			{
+				//set the low duty cycle THI_0
+				WS2812B_DMA_BUFF[dn] = WS2812B_TH_0;
+				dn++;
+
+			}
+
+		}
+
+
+		//then with red
+		for(int j = 7; j >= 0; j--){
+
+			if(((led_array[i].r >> j) & 0x01) == 1){
+
+				//set the high duty cycle THI_1
+				WS2812B_DMA_BUFF[dn] =  WS2812B_TH_1;
+				dn++;
+
+			}
+
+			else
+			{
+				//set the low duty cycle THI_0
+				WS2812B_DMA_BUFF[dn] = WS2812B_TH_0;
+				dn++;
+
+			}
+
+
+		}
+
+
+		//then with blue
+		for(int j = 7; j >= 0; j--){
+
+			if(((led_array[i].b >> j) & 0x01) == 1){
+
+				//set the high duty cycle THI_1
+				WS2812B_DMA_BUFF[dn] = WS2812B_TH_1;
+				dn++;
+			}
+
+			else
+			{
+				//set the low duty cycle THI_0
+				WS2812B_DMA_BUFF[dn] =  WS2812B_TH_0;
+				dn++;
+
+			}
+
+
+		}
+
+
+	}
+
+
+	// The reset pulse is already accounted for since the buffer length includes the reset period
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
 
 
 

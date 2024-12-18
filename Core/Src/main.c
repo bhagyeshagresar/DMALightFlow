@@ -44,6 +44,7 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+DMA_HandleTypeDef hdma_tim3_ch2;
 
 UART_HandleTypeDef huart2;
 
@@ -54,6 +55,7 @@ UART_HandleTypeDef huart2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
@@ -63,6 +65,11 @@ static void MX_TIM3_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
+
+	HAL_TIM_PWM_Stop_DMA(&htim, WS2812B_TIMER_CHANNEL);
+
+}
 
 /* USER CODE END 0 */
 
@@ -82,8 +89,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  ws2812b led_array[WS2812B_COUNT];
-  unsigned int delay_array[2*WS2812B_NUM_BITS];
+
 
 
   /* USER CODE END Init */
@@ -97,23 +103,50 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  ws2812b led_array[WS2812B_LED_COUNT];
 
 
   led_array[0].g = 0;
-  led_array[0].r = 255;
-  led_array[0].b = 0;
+  led_array[0].r = 0;
+  led_array[0].b = 255;
+
+
+  led_array[1].g = 0;
+  led_array[1].r = 255;
+  led_array[1].b = 0;
+
+  led_array[2].g = 255;
+  led_array[2].r = 0;
+  led_array[2].b = 0;
+
+
+  led_array[3].g = 255;
+  led_array[3].r = 0;
+  led_array[3].b = 255;
+
+  led_array[4].g = 0;
+  led_array[4].r = 255;
+  led_array[4].b = 255;
 
 
 
-  //set_ws2812b_color(led_array, delay_array);
-  HAL_TIM_Base_Start(&htim3);
+  //Initialize the buffer with empyy values
+  ws2812b_init();
 
-  //HAL_TIM_PWM_Start(&htim3, WS2812B_TIMER_CHANNEL);
+  // Update the buffer with all the duty cycle values
+  ws2812b_update_dma_buff(led_array);
+
+
+  //Start the timer in PWM mode and set the CC1DE DMA request enable bit so that the DMA transfers data from memory to the CCR register for PWM generation
+ /* HAL_TIM_PWM_Start_DMA(&htim3, htim3_CHANNEL, WS2812B_DMA_BUFF, WS2812B_NUM_BITS);*/
+
+  ws2812b_start_dma_transfer();
 
 
   /* USER CODE END 2 */
@@ -122,9 +155,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-	   set_ws2812b_color_bitbanging(led_array, delay_array);
-
 
 
     /* USER CODE END WHILE */
@@ -239,14 +269,15 @@ static void MX_TIM3_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM3_Init 1 */
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler = 1-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 100;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -258,15 +289,28 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
 
 }
 
@@ -304,6 +348,22 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -320,28 +380,31 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);
-
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+void ws2812b_start_dma_transfer(){
 
+	 HAL_StatusTypeDef ret = HAL_TIM_PWM_Start_DMA(&htim3, WS2812B_TIMER_CHANNEL, (uint32_t*)WS2812B_DMA_BUFF, WS2812B_DMA_BUFF_LEN);
+
+
+	 if(ret != HAL_OK){
+	 	  HAL_BUSY;
+	   }
+
+
+
+
+
+}
 /* USER CODE END 4 */
 
 /**
