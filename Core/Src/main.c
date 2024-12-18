@@ -131,7 +131,7 @@ int main(void)
   led_array[3].b = 255;
 
   led_array[4].g = 0;
-  led_array[4].r = 255;
+  led_array[4].r = 120;
   led_array[4].b = 255;
 
 

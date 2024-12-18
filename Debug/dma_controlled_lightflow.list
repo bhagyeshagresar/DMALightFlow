@@ -463,8 +463,8 @@ int main(void)
   led_array[4].g = 0;
  8000544:	2300      	movs	r3, #0
  8000546:	737b      	strb	r3, [r7, #13]
-  led_array[4].r = 255;
- 8000548:	23ff      	movs	r3, #255	; 0xff
+  led_array[4].r = 120;
+ 8000548:	2378      	movs	r3, #120	; 0x78
  800054a:	733b      	strb	r3, [r7, #12]
   led_array[4].b = 255;
  800054c:	23ff      	movs	r3, #255	; 0xff
