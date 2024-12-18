@@ -25,3 +25,4 @@ In the NVIC Settings, the `DMA1 stream5 global interrupt` and the `TIM3 global i
 
 The timer sends a request to the DMA by setting the `CC2DE` bit. Once the DMA transfer is complete, `TCIF` event flag is set using the `Transfer Complete` Interrupt Event.
 
+![alt text](led_strip.jpg)
