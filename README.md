@@ -16,7 +16,6 @@ AutoReload Register/Counter : 65535
 ## DMA Control
 I am using `Timer3 Channel 2` configured with a clock input of 80 MHz, AutoReload Register set to 99, Prescaler is 0. This gives us a period of 1.25 us.
 
-
 DMA Settings (Memory to Peripheral):
 Normal Mode -> Since Data will be latched once we send reset command and incrementing only the memory address
 FIFO Mode   -> Half Word Data width for both peripheral and memory since PWM CCR Register is a 16 bit value
